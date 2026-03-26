@@ -63,27 +63,8 @@ async function startServer() {
     res.json({ status: 'ok', time: new Date().toISOString() });
   });
 
-  app.post('/api/admin/login', async (req, res) => {
-    const { username, password } = req.body;
-    try {
-      const admin = await prisma.adminUser.findUnique({ where: { username } });
-      if (!admin) return res.status(401).json({ error: '아이디 또는 비밀번호가 잘못되었습니다.' });
-
-      const isValid = await bcrypt.compare(password, admin.password_hash);
-      if (!isValid) return res.status(401).json({ error: '아이디 또는 비밀번호가 잘못되었습니다.' });
-
-      const token = jwt.sign(
-        { id: admin.id, username: admin.username, role: admin.role }, 
-        JWT_SECRET, 
-        { expiresIn: '1d' }
-      );
-      
-      res.json({ success: true, token, admin: { username: admin.username, role: admin.role } });
-    } catch (error) {
-      res.status(500).json({ error: '로그인 처리 중 오류가 발생했습니다.' });
-    }
-  });
-
+app.post('/api/admin/login', async (req, res) => {
+  
   app.get('/api/admin/events', requireAdmin, async (req, res) => {
     try {
       const events = await prisma.event.findMany({
