@@ -64,7 +64,7 @@ async function startServer() {
   });
 
 app.post('/api/admin/login', async (req, res) => {
-  
+
   app.get('/api/admin/events', requireAdmin, async (req, res) => {
     try {
       const events = await prisma.event.findMany({
