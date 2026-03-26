@@ -66,10 +66,12 @@ async function startServer() {
 app.post('/api/admin/login', async (req, res) => {
   const { username, password } = req.body;
 
-  // 하드코딩된 관리자 계정
-  if (username === 'admin1' && password === 'admin123') {
+  const validAdmins = ['admin1', 'admin2', 'admin3'];
+  const validPassword = 'admin123';
+
+  if (validAdmins.includes(username) && password === validPassword) {
     const token = jwt.sign(
-      { id: 'admin1', role: 'admin' },
+      { id: username, role: 'admin' },
       JWT_SECRET,
       { expiresIn: '1d' }
     );
@@ -78,7 +80,7 @@ app.post('/api/admin/login', async (req, res) => {
 
   res.status(401).json({ error: 'Invalid credentials' });
 });
-
+  
   app.get('/api/admin/events', requireAdmin, async (req, res) => {
     try {
       const events = await prisma.event.findMany({
