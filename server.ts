@@ -64,6 +64,20 @@ async function startServer() {
   });
 
 app.post('/api/admin/login', async (req, res) => {
+  const { username, password } = req.body;
+
+  // 하드코딩된 관리자 계정
+  if (username === 'admin1' && password === 'admin123') {
+    const token = jwt.sign(
+      { id: 'admin1', role: 'admin' },
+      JWT_SECRET,
+      { expiresIn: '1d' }
+    );
+    return res.json({ success: true, token });
+  }
+
+  res.status(401).json({ error: 'Invalid credentials' });
+});
 
   app.get('/api/admin/events', requireAdmin, async (req, res) => {
     try {
