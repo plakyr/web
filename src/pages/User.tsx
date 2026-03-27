@@ -47,6 +47,38 @@ export default function User() {
       }
     };
 
+      useEffect(() => {
+    const fetchEventData = async () => {
+      try {
+        // seats.ts 대신 events.ts를 통해 좌석과 이벤트 정보를 가져옵니다.
+        const res = await fetch('/api/admin/events'); 
+        if (res.ok) {
+          const data = await res.json();
+          
+          // 현재 활성화된 이벤트 찾기
+          const activeEvent = data.find((e: any) => e.is_active) || data[0];
+          
+          if (activeEvent && activeEvent.VenueLayout?.[0]) {
+            const layout = activeEvent.VenueLayout[0];
+            // 스토어에 좌석 데이터 주입
+            useStore.getState().setSeats(layout.Seat || []);
+            
+            // 참가자 데이터도 함께 있다면 업데이트
+            if (activeEvent.Participant) {
+              useStore.getState().setParticipants(activeEvent.Participant);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('데이터 로딩 실패:', err);
+      }
+    };
+
+    if (user) {
+      fetchEventData();
+    }
+  }, [user]);
+
     if (user?.event_id) {
       fetchInitialData();
     }
