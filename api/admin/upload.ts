@@ -1,9 +1,11 @@
-// api/admin/upload.ts
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import multer from 'multer';
 import { parse } from 'csv-parse/sync';
+import crypto from 'crypto';
 
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({
+  storage: multer.memoryStorage(),
+});
 
 const runMiddleware = (
   req: VercelRequest,
@@ -26,7 +28,9 @@ const requireAdmin = (req: VercelRequest) => {
   if (!token) return false;
 
   try {
-    const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
+    const payload = JSON.parse(
+      Buffer.from(token.split('.')[1], 'base64').toString()
+    );
     return payload?.role === 'admin';
   } catch {
     return false;
@@ -37,6 +41,14 @@ export const config = {
   api: {
     bodyParser: false,
   },
+};
+
+type CsvRow = {
+  event_id: string;
+  session_id: string;
+  participant_name: string;
+  phone_last4: string;
+  order_in_session: string;
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -62,32 +74,37 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'name, rows, cols are required' });
     }
 
-    const rawRecords = parse(file.buffer, {
+    const parsedRows = parse(file.buffer, {
       columns: true,
       skip_empty_lines: true,
       bom: true,
     });
 
-    let records = rawRecords.map((record: Record<string, any>) => {
-      const cleaned: Record<string, any> = {};
+    let records: CsvRow[] = parsedRows.map((record: Record<string, any>) => {
+      const cleaned: Record<string, string> = {};
+
       for (const key in record) {
         const cleanKey = key.replace(/^\uFEFF/, '').trim();
-        cleaned[cleanKey] = typeof record[key] === 'string' ? record[key].trim() : record[key];
+        cleaned[cleanKey] = String(record[key] ?? '').trim();
       }
-      return cleaned;
+
+      return cleaned as CsvRow;
     });
 
-    records = records.filter((r: Record<string, any>) =>
-      Object.values(r).some((v) => String(v ?? '').trim() !== '')
+    records = records.filter((row) =>
+      Object.values(row).some((value) => String(value).trim() !== '')
     );
 
-    if (records.length > 0) {
-      const firstRecordKeys = Object.keys(records[0]);
-      if (firstRecordKeys.length === 1 && firstRecordKeys[0].includes(';')) {
-        return res.status(400).json({
-          error: 'CSV 파일의 구분자가 쉼표(,)가 아닌 세미콜론(;)입니다. 쉼표로 구분된 CSV 파일을 업로드해주세요.',
-        });
-      }
+    if (records.length === 0) {
+      return res.status(400).json({ error: 'CSV 데이터가 비어 있습니다.' });
+    }
+
+    const firstRecordKeys = Object.keys(records[0]);
+    if (firstRecordKeys.length === 1 && firstRecordKeys[0].includes(';')) {
+      return res.status(400).json({
+        error:
+          'CSV 파일의 구분자가 쉼표(,)가 아닌 세미콜론(;)입니다. 쉼표로 구분된 CSV 파일을 업로드해주세요.',
+      });
     }
 
     const requiredColumns = [
@@ -98,12 +115,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       'order_in_session',
     ];
 
-    if (records.length === 0) {
-      return res.status(400).json({ error: 'CSV 데이터가 비어 있습니다.' });
-    }
-
-    const firstKeys = Object.keys(records[0]);
-    const missingColumns = requiredColumns.filter((col) => !firstKeys.includes(col));
+    const missingColumns = requiredColumns.filter(
+      (col) => !firstRecordKeys.includes(col)
+    );
 
     if (missingColumns.length > 0) {
       return res.status(400).json({
@@ -111,32 +125,61 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
+    const invalidRowIndex = records.findIndex(
+      (row) =>
+        !row.session_id ||
+        !row.participant_name ||
+        !row.phone_last4 ||
+        !row.order_in_session
+    );
+
+    if (invalidRowIndex !== -1) {
+      return res.status(400).json({
+        error: `CSV 파일 ${invalidRowIndex + 2}번째 행에 필수 데이터가 누락되었습니다.`,
+      });
+    }
+
+    const parsedRowsNum = Number(rows);
+    const parsedColsNum = Number(cols);
+
+    if (
+      !Number.isInteger(parsedRowsNum) ||
+      !Number.isInteger(parsedColsNum) ||
+      parsedRowsNum <= 0 ||
+      parsedColsNum <= 0
+    ) {
+      return res.status(400).json({
+        error: 'rows와 cols는 1 이상의 정수여야 합니다.',
+      });
+    }
+
     const participantCounts = new Map<string, number>();
-    records.forEach((r: Record<string, any>) => {
-      const key = `${r.participant_name}-${r.phone_last4}`;
+    for (const row of records) {
+      const key = `${row.participant_name}-${row.phone_last4}`;
       participantCounts.set(key, (participantCounts.get(key) || 0) + 1);
-    });
+    }
 
     const turnGroups = new Set<string>();
-    records.forEach((r: Record<string, any>) => {
-      turnGroups.add(`${r.session_id}|${r.order_in_session}`);
-    });
+    for (const row of records) {
+      turnGroups.add(`${row.session_id}|${row.order_in_session}`);
+    }
 
     const sortedTurnGroups = Array.from(turnGroups).sort((a, b) => {
-      const [sA, oA] = a.split('|');
-      const [sB, oB] = b.split('|');
+      const [sessionA, orderA] = a.split('|');
+      const [sessionB, orderB] = b.split('|');
 
-      if (sA !== sB) {
-        const numA = parseInt(sA.replace(/\D/g, ''), 10);
-        const numB = parseInt(sB.replace(/\D/g, ''), 10);
+      if (sessionA !== sessionB) {
+        const numA = parseInt(sessionA.replace(/\D/g, ''), 10);
+        const numB = parseInt(sessionB.replace(/\D/g, ''), 10);
 
-        if (!isNaN(numA) && !isNaN(numB) && numA !== numB) {
+        if (!Number.isNaN(numA) && !Number.isNaN(numB) && numA !== numB) {
           return numA - numB;
         }
-        return sA.localeCompare(sB);
+
+        return sessionA.localeCompare(sessionB);
       }
 
-      return parseInt(oA, 10) - parseInt(oB, 10);
+      return Number(orderA) - Number(orderB);
     });
 
     const turnOrderMap = new Map<string, number>();
@@ -144,30 +187,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       turnOrderMap.set(group, index + 1);
     });
 
-    const participants = records.map((r: Record<string, any>, index: number) => {
-      if (!r.session_id || !r.participant_name || !r.phone_last4) {
-        throw new Error(`CSV 파일 ${index + 1}번째 행에 필수 데이터가 누락되었습니다.`);
-      }
-
-      const key = `${r.participant_name}-${r.phone_last4}`;
-      const isDuplicate = (participantCounts.get(key) || 0) > 1;
-      const globalTurnOrder = turnOrderMap.get(`${r.session_id}|${r.order_in_session}`) || 1;
+    const participants = records.map((row) => {
+      const duplicateKey = `${row.participant_name}-${row.phone_last4}`;
+      const isDuplicate = (participantCounts.get(duplicateKey) || 0) > 1;
+      const turnKey = `${row.session_id}|${row.order_in_session}`;
+      const globalTurnOrder = turnOrderMap.get(turnKey) || 1;
 
       return {
-        event_id: String(r.event_id),
-        session_id: String(r.session_id),
-        name: String(r.participant_name),
-        phone_last4: String(r.phone_last4),
+        event_id: row.event_id,
+        session_id: row.session_id,
+        name: row.participant_name,
+        phone_last4: row.phone_last4,
         unique_code: isDuplicate
-          ? Math.random().toString(36).substring(2, 6).toUpperCase()
+          ? crypto.randomBytes(2).toString('hex').toUpperCase()
           : null,
         turn_order: globalTurnOrder,
       };
     });
 
     const seats = [];
-    for (let r = 1; r <= parseInt(rows, 10); r++) {
-      for (let c = 1; c <= parseInt(cols, 10); c++) {
+    for (let r = 1; r <= parsedRowsNum; r++) {
+      for (let c = 1; c <= parsedColsNum; c++) {
         seats.push({
           row: r,
           col: c,
@@ -176,21 +216,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    const sessions = Array.from(
-      new Set(records.map((r: Record<string, any>) => r.session_id))
-    )
+    const sessions = Array.from(new Set(records.map((row) => row.session_id)))
       .filter(Boolean)
-      .sort();
+      .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+
+    const event = {
+      id: crypto.randomUUID(),
+      name: String(name),
+      rows: parsedRowsNum,
+      cols: parsedColsNum,
+    };
 
     return res.status(200).json({
       success: true,
-      mode: 'vercel-hardcoded',
-      event: {
-        id: crypto.randomUUID?.() ?? `event_${Date.now()}`,
-        name,
-        rows: parseInt(rows, 10),
-        cols: parseInt(cols, 10),
-      },
+      eventId: event.id,
+      event,
       summary: {
         participantCount: participants.length,
         seatCount: seats.length,
