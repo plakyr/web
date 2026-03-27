@@ -42,6 +42,16 @@ export default function Admin() {
     }
   }, [selectedEventId, socket]);
 
+  useEffect(() => {
+    if (selectedEventId && events.length > 0) {
+      const currentEvent = events.find(ev => ev.id === selectedEventId);
+      if (currentEvent) {
+        console.log("선택된 이벤트 데이터 주입:", currentEvent.name);
+        updateStoreWithEventData(currentEvent);
+      }
+    }
+  }, [selectedEventId, events]);
+
   const fetchEvents = async () => {
     try {
       const res = await fetch('/api/admin/events', {
