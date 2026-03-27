@@ -5,9 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "prisma generate && vite build",
+    "build": "prisma generate --schema=./prisma/schema.prisma && vite build", 
     "preview": "vite preview",
-    "postinstall": "" 
+    "postinstall": ""
   },
   "dependencies": {
     "@google/genai": "^1.29.0",
