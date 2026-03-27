@@ -257,9 +257,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (seatsData.length > 0) {
       await prisma.seat.createMany({
         data: seatsData,
+        skipDuplicates: true,
       });
     }
 
+    await prisma.systemState.deleteMany({ where: { event_id: createdEvent.id } });
     await prisma.systemState.create({
       data: {
         event_id: createdEvent.id,
