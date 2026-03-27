@@ -97,7 +97,7 @@ export default function Admin() {
       });
       const data = await res.json();
       if (res.ok) {
-        setStatus('업로드 성공! 이벤트 ID: ' + data.eventId);
+        setStatus('업로드 성공! 이벤트 ID: ' + (data.eventId || data.event?.id));
         setEventName('');
         setFile(null);
         if (activeTab === 'MONITOR') fetchEvents();
