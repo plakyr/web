@@ -16,34 +16,28 @@ export default function User() {
   const [timeLeft, setTimeLeft] = useState<string | null>(null);
   const [timerStatus, setTimerStatus] = useState<'WAITING' | 'ACTIVE' | 'EXPIRED' | 'COMPLETED'>('WAITING');
 
-useEffect(() => {
+  // 1. 데이터 로딩 (좌석 및 이벤트 정보) - user 유무와 상관없이 우선 시도
+  useEffect(() => {
     const fetchInitialData = async () => {
       try {
-        // 401 에러를 피하기 위해 일반 유저용 API 호출
+        console.log("Fetching seats data...");
         const res = await fetch('/api/seats');
         if (res.ok) {
           const data = await res.json();
-          
-          // useStore에 데이터 주입
-          if (data.seats) {
-            useStore.getState().setSeats(data.seats);
-          }
-          if (data.participants) {
-            useStore.getState().setParticipants(data.participants);
-          }
-          if (data.sessionColors) {
-            useStore.getState().setSessionColors(data.sessionColors);
-          }
+          console.log("Data received:", data);
+          if (data.seats) useStore.getState().setSeats(data.seats);
+          if (data.participants) useStore.getState().setParticipants(data.participants);
+          if (data.sessionColors) useStore.getState().setSessionColors(data.sessionColors);
+        } else {
+          console.error("Fetch failed with status:", res.status);
         }
       } catch (err) {
-        console.error('초기 데이터 로드 실패:', err);
+        console.error('API Fetch Error:', err);
       }
     };
 
-    if (user) {
-      fetchInitialData();
-    }
-  }, [user]);
+    fetchInitialData();
+  }, [user?.id]); // 사용자 ID가 변경될 때마다(로그인 포함) 다시 확인
 
   // 2. 타이머 로직
   useEffect(() => {
@@ -58,7 +52,7 @@ useEffect(() => {
     const updateTimer = () => {
       const now = new Date(serverTime).getTime();
       const turnStart = new Date(currentTurnStartTime).getTime();
-      const turnEnd = turnStart + 3 * 60000; // 3분
+      const turnEnd = turnStart + 3 * 60000;
 
       if (user.turn_order > currentTurnOrder) {
         setTimerStatus('WAITING');
@@ -103,55 +97,29 @@ useEffect(() => {
         body: JSON.stringify({ name, phone_last4: phone, unique_code: uniqueCode || undefined })
       });
       const data = await res.json();
-      
       if (!res.ok) {
-        if (res.status === 409) {
-          setRequiresCode(true);
-          setError(data.error);
-        } else {
-          setError(data.error || '로그인 실패');
-        }
+        if (res.status === 409) { setRequiresCode(true); setError(data.error); }
+        else { setError(data.error || '로그인 실패'); }
         return;
       }
-      
       if (data.user) {
         setUser(data.user, data.sessionToken);
         setSessionExpiredMsg('');
-      } else {
-        setError('사용자 정보를 불러올 수 없습니다.');
       }
-    } catch (err) {
-      setError('서버 오류가 발생했습니다.');
-    }
+    } catch (err) { setError('서버 오류가 발생했습니다.'); }
   };
 
   if (!user) {
     return (
       <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
         <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8">
-          <h1 className="text-2xl font-bold text-center mb-8 text-gray-900">참가자 로그인</h1>
-          {sessionExpiredMsg && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm font-medium text-center">
-              {sessionExpiredMsg}
-            </div>
-          )}
+          <h1 className="text-2xl font-bold text-center mb-8">참가자 로그인</h1>
           <form onSubmit={handleLogin} className="space-y-5">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">이름</label>
-              <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="홍길동" required />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">전화번호 뒷자리 (4자리)</label>
-              <input type="text" maxLength={4} value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="1234" required />
-            </div>
-            {requiresCode && (
-              <div className="animate-in fade-in slide-in-from-top-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">고유 코드</label>
-                <input type="text" value={uniqueCode} onChange={(e) => setUniqueCode(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="부여받은 코드 입력" required />
-              </div>
-            )}
-            {error && <p className="text-red-500 text-sm font-medium">{error}</p>}
-            <button type="submit" className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-lg transition-colors mt-6 shadow-md">입장하기</button>
+            <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="w-full px-4 py-3 rounded-xl border" placeholder="이름" required />
+            <input type="text" maxLength={4} value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full px-4 py-3 rounded-xl border" placeholder="전화번호 뒷자리" required />
+            {requiresCode && <input type="text" value={uniqueCode} onChange={(e) => setUniqueCode(e.target.value)} className="w-full px-4 py-3 rounded-xl border" placeholder="고유 코드" required />}
+            {error && <p className="text-red-500 text-sm">{error}</p>}
+            <button type="submit" className="w-full py-4 bg-blue-600 text-white rounded-xl font-bold">입장하기</button>
           </form>
         </div>
       </div>
@@ -162,62 +130,18 @@ useEffect(() => {
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <header className="bg-white shadow-sm p-4 sticky top-0 z-20 flex justify-between items-center">
         <div>
-          <h1 className="text-lg font-bold text-gray-900">{user.name}님</h1>
-          <p className="text-sm text-gray-500 font-medium">
-            세션: <span className="text-blue-600 font-bold">{user.session_id}</span> | 
-            순서: <span className="text-blue-600 font-bold">{user.turn_order}번째</span>
-          </p>
-        </div>
-        <div className="text-right">
-          <p className="text-xs text-gray-500 mb-0.5">내 선택 시간</p>
-          <p className="text-sm font-bold text-gray-800 bg-gray-100 px-2 py-1 rounded-md">
-            {user.allowed_start_time ? new Date(user.allowed_start_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '미정'} ~ 
-            {user.allowed_end_time ? new Date(user.allowed_end_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '미정'}
-          </p>
+          <h1 className="text-lg font-bold">{user.name}님</h1>
+          <p className="text-sm text-gray-500">세션: {user.session_id} | 순서: {user.turn_order}번째</p>
         </div>
       </header>
-      
       <main className="flex-1 p-4 flex flex-col max-w-5xl mx-auto w-full">
-        {isFrozen && (
-          <div className="mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded-xl font-bold text-center shadow-sm">
-            시스템이 일시정지되었습니다: {frozenReason || '사유 없음'}
-          </div>
-        )}
-        <div className="flex-1 flex flex-col">
-          <div className="flex justify-between items-end mb-4">
-            <h2 className="text-xl font-bold text-gray-900">좌석 맵</h2>
-            <p className="text-sm text-gray-500">두 손가락으로 확대/축소 가능</p>
-          </div>
-          <div className="flex-1 relative min-h-[400px]">
-            <SeatMap />
-          </div>
+        <div className="flex-1 relative min-h-[400px]">
+          <SeatMap />
         </div>
-
         <div className="mt-6 h-[300px]">
           <ChatWindow eventId={user.event_id} />
         </div>
       </main>
-      
-      <footer className="bg-white border-t p-4 sticky bottom-0 z-20 shadow-md">
-        <div className="max-w-5xl mx-auto flex gap-3">
-          {timerStatus === 'WAITING' && (
-            <button className="flex-1 py-4 bg-gray-200 text-gray-500 rounded-xl font-bold text-lg cursor-not-allowed">
-              {timeLeft ? `시작까지 ${timeLeft} 남음` : '아직 차례가 아닙니다'}
-            </button>
-          )}
-          {timerStatus === 'ACTIVE' && (
-            <div className={`flex-1 py-4 rounded-xl font-bold text-lg text-center shadow-md ${isFrozen ? 'bg-gray-400 text-white cursor-not-allowed' : 'bg-blue-600 text-white animate-pulse'}`}>
-              {isFrozen ? '일시정지 중' : `선택 가능 시간: ${timeLeft}`}
-            </div>
-          )}
-          {timerStatus === 'EXPIRED' && (
-            <button className="flex-1 py-4 bg-red-100 text-red-700 rounded-xl font-bold text-lg cursor-not-allowed">선택 시간이 종료되었습니다</button>
-          )}
-          {timerStatus === 'COMPLETED' && (
-            <button className="flex-1 py-4 bg-green-100 text-green-700 rounded-xl font-bold text-lg cursor-not-allowed">좌석 선택이 완료되었습니다</button>
-          )}
-        </div>
-      </footer>
     </div>
   );
 }
