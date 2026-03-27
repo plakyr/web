@@ -5,33 +5,41 @@ const prisma = new PrismaClient();
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
-    // 1. 활성화된 이벤트의 ID를 가져옵니다.
-    const activeEvents: any[] = await prisma.$queryRaw`SELECT id FROM "Event" WHERE is_active = true LIMIT 1`;
-    
-    if (!activeEvents || activeEvents.length === 0) {
+    // 1. 활성화된 이벤트 찾기 (대소문자 무관하게 시도)
+    const event: any = await prisma.event.findFirst({
+      where: { is_active: true }
+    }) || await (prisma as any).Event.findFirst({
+      where: { is_active: true }
+    });
+
+    if (!event) {
       return res.status(404).json({ error: '활성화된 이벤트가 없습니다.' });
     }
 
-    const eventId = activeEvents[0].id;
+    // 2. 가장 에러가 많이 나는 VenueLayout과 Seat 가져오기
+    // include 대신 별도로 조회하여 에러 지점을 특정합니다.
+    const layouts = await prisma.venueLayout.findMany({
+      where: { event_id: event.id }
+    }) || await (prisma as any).VenueLayout.findMany({
+      where: { event_id: event.id }
+    });
 
-    // 2. 해당 이벤트의 좌석들을 직접 쿼리로 가져옵니다.
-    // 테이블명은 보통 "Seat" 또는 "seat"입니다. 대소문자를 구분하여 시도합니다.
-    const seats: any[] = await prisma.$queryRaw`
-      SELECT * FROM "Seat" 
-      WHERE venue_layout_id IN (
-        SELECT id FROM "VenueLayout" WHERE event_id = ${eventId}
-      )
-    `;
+    const layoutId = layouts[0]?.id;
+    let seats: any[] = [];
 
-    // 3. 참가자 명단 가져오기
-    const participants: any[] = await prisma.$queryRaw`
-      SELECT * FROM "Participant" WHERE event_id = ${eventId}
-    `;
+    if (layoutId) {
+      // Seat 테이블 조회 (Prisma Client가 생성한 이름을 동적으로 찾음)
+      seats = await (prisma as any).seat.findMany({
+        where: { venue_layout_id: layoutId }
+      }) || await (prisma as any).Seat.findMany({
+        where: { venue_layout_id: layoutId }
+      });
+    }
 
-    // 4. 세션 컬러 정보 가져오기
-    const sessionColors: any[] = await prisma.$queryRaw`
-      SELECT * FROM "SessionColor" WHERE event_id = ${eventId}
-    `;
+    // 3. 참가자 및 세션 컬러 조회
+    const participants = await prisma.participant.findMany({ where: { event_id: event.id } });
+    const sessionColors = await (prisma as any).sessionColor.findMany({ where: { event_id: event.id } }) 
+                         || await (prisma as any).SessionColor.findMany({ where: { event_id: event.id } });
 
     return res.status(200).json({
       seats: seats || [],
@@ -40,10 +48,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
 
   } catch (error: any) {
-    console.error('SQL Error:', error);
+    console.error('SERVER_ERROR:', error);
+    // 500 에러 시 브라우저 콘솔에 "진짜 이유"를 던져줍니다.
     return res.status(500).json({ 
-      error: '데이터베이스 직접 조회 실패', 
-      message: error.message 
+      error: 'DB 조회 실패', 
+      message: error.message,
+      stack: error.stack 
     });
   } finally {
     await prisma.$disconnect();
