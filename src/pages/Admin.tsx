@@ -49,10 +49,32 @@ export default function Admin() {
       });
       const data = await res.json();
       if (res.ok) {
-        setEvents(data.events);
+        // 기존: setEvents(data.events); 
+        // 수정: API 응답 구조가 { events: [...] }인지 확인 후 처리
+        const eventList = data.events || data; 
+        setEvents(eventList);
+
+        // 만약 선택된 이벤트가 이미 있다면, 해당 데이터로 스토어 업데이트
+        if (selectedEventId) {
+          const selected = eventList.find((e: any) => e.id === selectedEventId);
+          if (selected) updateStoreWithEventData(selected);
+        }
       }
     } catch (err) {
       console.error('Failed to fetch events', err);
+    }
+  };
+
+  // 데이터 주입을 위한 헬퍼 함수 추가 (Admin 컴포넌트 내부)
+  const updateStoreWithEventData = (event: any) => {
+    if (event.layouts?.[0]?.seats) {
+      useStore.getState().setSeats(event.layouts[0].seats);
+    }
+    if (event.participants) {
+      useStore.getState().setParticipants(event.participants);
+    }
+    if (event.sessionColors) {
+      useStore.getState().setSessionColors(event.sessionColors);
     }
   };
 
