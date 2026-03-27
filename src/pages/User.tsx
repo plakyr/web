@@ -24,6 +24,34 @@ export default function User() {
       setTimeLeft('00:00');
       return;
     }
+  
+    useEffect(() => {
+    const fetchInitialData = async () => {
+      try {
+        // 1. 좌석 정보 가져오기
+        const seatsRes = await fetch('/api/seats');
+        if (seatsRes.ok) {
+          const seatsData = await seatsRes.json();
+          // 스토어의 setSeats 함수를 사용하여 데이터 주입
+          useStore.getState().setSeats(seatsData.seats || seatsData);
+        }
+
+        // 2. 초기 참가자 데이터도 필요하다면 로드
+        const participantsRes = await fetch('/api/participants');
+        if (participantsRes.ok) {
+          const pData = await participantsRes.json();
+          useStore.getState().setParticipants(pData.participants || pData);
+        }
+      } catch (err) {
+        console.error('데이터 로딩 오류:', err);
+      }
+    };
+
+    if (user?.event_id) {
+      fetchInitialData();
+    }
+  }, [user?.event_id]);
+    
 
     const updateTimer = () => {
       const now = new Date(serverTime).getTime();
