@@ -1,7 +1,17 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import multer from 'multer';
 import { parse } from 'csv-parse/sync';
-import crypto from 'crypto';
+import { PrismaClient } from '@prisma/client';
+
+const globalForPrisma = globalThis as unknown as {
+  prisma?: PrismaClient;
+};
+
+const prisma = globalForPrisma.prisma ?? new PrismaClient();
+
+if (process.env.NODE_ENV !== 'production') {
+  globalForPrisma.prisma = prisma;
+}
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -74,6 +84,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'name, rows, cols are required' });
     }
 
+    const parsedRowsNum = Number(rows);
+    const parsedColsNum = Number(cols);
+
+    if (
+      !Number.isInteger(parsedRowsNum) ||
+      !Number.isInteger(parsedColsNum) ||
+      parsedRowsNum <= 0 ||
+      parsedColsNum <= 0
+    ) {
+      return res.status(400).json({
+        error: 'rows와 cols는 1 이상의 정수여야 합니다.',
+      });
+    }
+
     const parsedRows = parse(file.buffer, {
       columns: true,
       skip_empty_lines: true,
@@ -100,6 +124,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const firstRecordKeys = Object.keys(records[0]);
+
     if (firstRecordKeys.length === 1 && firstRecordKeys[0].includes(';')) {
       return res.status(400).json({
         error:
@@ -139,20 +164,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    const parsedRowsNum = Number(rows);
-    const parsedColsNum = Number(cols);
-
-    if (
-      !Number.isInteger(parsedRowsNum) ||
-      !Number.isInteger(parsedColsNum) ||
-      parsedRowsNum <= 0 ||
-      parsedColsNum <= 0
-    ) {
-      return res.status(400).json({
-        error: 'rows와 cols는 1 이상의 정수여야 합니다.',
-      });
-    }
-
     const participantCounts = new Map<string, number>();
     for (const row of records) {
       const key = `${row.participant_name}-${row.phone_last4}`;
@@ -187,58 +198,98 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       turnOrderMap.set(group, index + 1);
     });
 
-    const participants = records.map((row) => {
+    const now = new Date();
+
+    const createdEvent = await prisma.event.create({
+      data: {
+        name: String(name),
+        date: now,
+        is_active: true,
+      },
+    });
+
+    const createdLayout = await prisma.venueLayout.create({
+      data: {
+        event_id: createdEvent.id,
+        rows: parsedRowsNum,
+        cols: parsedColsNum,
+      },
+    });
+
+    const participantsData = records.map((row) => {
       const duplicateKey = `${row.participant_name}-${row.phone_last4}`;
       const isDuplicate = (participantCounts.get(duplicateKey) || 0) > 1;
       const turnKey = `${row.session_id}|${row.order_in_session}`;
       const globalTurnOrder = turnOrderMap.get(turnKey) || 1;
 
       return {
-        event_id: row.event_id,
+        event_id: createdEvent.id,
         session_id: row.session_id,
         name: row.participant_name,
         phone_last4: row.phone_last4,
         unique_code: isDuplicate
-          ? crypto.randomBytes(2).toString('hex').toUpperCase()
+          ? Math.random().toString(36).substring(2, 6).toUpperCase()
           : null,
         turn_order: globalTurnOrder,
       };
     });
 
-    const seats = [];
+    if (participantsData.length > 0) {
+      await prisma.participant.createMany({
+        data: participantsData,
+      });
+    }
+
+    const seatsData = [];
     for (let r = 1; r <= parsedRowsNum; r++) {
       for (let c = 1; c <= parsedColsNum; c++) {
-        seats.push({
+        seatsData.push({
+          layout_id: createdLayout.id,
           row: r,
           col: c,
           status: 'EMPTY',
+          assigned_to: null,
+          session_id: null,
         });
       }
     }
+
+    if (seatsData.length > 0) {
+      await prisma.seat.createMany({
+        data: seatsData,
+      });
+    }
+
+    await prisma.systemState.create({
+      data: {
+        event_id: createdEvent.id,
+        is_frozen: false,
+        current_turn_order: 1,
+        current_turn_start_time: now,
+      },
+    });
 
     const sessions = Array.from(new Set(records.map((row) => row.session_id)))
       .filter(Boolean)
       .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 
-    const event = {
-      id: crypto.randomUUID(),
-      name: String(name),
-      rows: parsedRowsNum,
-      cols: parsedColsNum,
-    };
-
     return res.status(200).json({
       success: true,
-      eventId: event.id,
-      event,
+      eventId: createdEvent.id,
+      event: {
+        id: createdEvent.id,
+        name: createdEvent.name,
+        date: createdEvent.date,
+        rows: createdLayout.rows,
+        cols: createdLayout.cols,
+        layoutId: createdLayout.id,
+      },
       summary: {
-        participantCount: participants.length,
-        seatCount: seats.length,
+        participantCount: participantsData.length,
+        seatCount: seatsData.length,
         sessionCount: sessions.length,
       },
       sessions,
-      participants,
-      seats,
     });
   } catch (error: any) {
     return res.status(500).json({
