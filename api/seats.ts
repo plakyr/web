@@ -5,47 +5,45 @@ const prisma = new PrismaClient();
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
-    // 1. 활성화된 이벤트 찾기
-    const event = await prisma.event.findFirst({
-      where: { is_active: true }
-    });
-
-    if (!event) {
+    // 1. 활성화된 이벤트의 ID를 가져옵니다.
+    const activeEvents: any[] = await prisma.$queryRaw`SELECT id FROM "Event" WHERE is_active = true LIMIT 1`;
+    
+    if (!activeEvents || activeEvents.length === 0) {
       return res.status(404).json({ error: '활성화된 이벤트가 없습니다.' });
     }
 
-    // 2. 모델명 대소문자 이슈를 피하기 위해 PrismaClient의 내부 모델명을 확인하여 호출
-    // 보통 Prisma는 내부적으로 소문자(venueLayout)를 권장하지만 환경에 따라 다를 수 있음
-    const layout = await (prisma as any).venueLayout?.findFirst({
-      where: { event_id: event.id },
-      include: { Seat: true }
-    }) || await (prisma as any).VenueLayout?.findFirst({
-      where: { event_id: event.id },
-      include: { Seat: true }
-    });
+    const eventId = activeEvents[0].id;
 
-    // 3. 참가자 및 컬러 정보 (모델명이 확실한 것들)
-    const participants = await prisma.participant.findMany({
-      where: { event_id: event.id }
-    });
+    // 2. 해당 이벤트의 좌석들을 직접 쿼리로 가져옵니다.
+    // 테이블명은 보통 "Seat" 또는 "seat"입니다. 대소문자를 구분하여 시도합니다.
+    const seats: any[] = await prisma.$queryRaw`
+      SELECT * FROM "Seat" 
+      WHERE venue_layout_id IN (
+        SELECT id FROM "VenueLayout" WHERE event_id = ${eventId}
+      )
+    `;
 
-    const sessionColors = await (prisma as any).sessionColor?.findMany({
-      where: { event_id: event.id }
-    }) || await (prisma as any).SessionColor?.findMany({
-      where: { event_id: event.id }
-    });
+    // 3. 참가자 명단 가져오기
+    const participants: any[] = await prisma.$queryRaw`
+      SELECT * FROM "Participant" WHERE event_id = ${eventId}
+    `;
+
+    // 4. 세션 컬러 정보 가져오기
+    const sessionColors: any[] = await prisma.$queryRaw`
+      SELECT * FROM "SessionColor" WHERE event_id = ${eventId}
+    `;
 
     return res.status(200).json({
-      seats: layout?.Seat || [],
+      seats: seats || [],
       participants: participants || [],
       sessionColors: sessionColors || []
     });
 
   } catch (error: any) {
-    console.error('API Error Details:', error);
+    console.error('SQL Error:', error);
     return res.status(500).json({ 
-      error: 'Database Query Failed', 
-      detail: error.message 
+      error: '데이터베이스 직접 조회 실패', 
+      message: error.message 
     });
   } finally {
     await prisma.$disconnect();
