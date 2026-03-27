@@ -40,9 +40,6 @@ export default function User() {
     fetchInitialData(); // 의존성 없이 무조건 실행
   }, []); // 페이지 로드 시 최초 1회 실행
   
-    fetchInitialData();
-  }, [user?.id]); // 사용자 ID가 변경될 때마다(로그인 포함) 다시 확인
-
   // 2. 타이머 로직
   useEffect(() => {
     if (!user || !serverTime || !currentTurnStartTime) return;
