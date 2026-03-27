@@ -18,8 +18,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const participant = await prisma.participant.findFirst({
       where: {
         session_id: session_id,
-        phone_last4: phone_last4,
-        turn_order: Number(turn_order), // 숫자로 변환
       },
     });
 
