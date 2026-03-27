@@ -85,8 +85,14 @@ export default function User() {
         return;
       }
       
-      setUser(data.participant, data.sessionToken);
-      setSessionExpiredMsg('');
+      // data.participant 대신 data.user를 사용하여 상태를 업데이트합니다.
+      if (data.user) {
+        setUser(data.user, data.sessionToken);
+        setSessionExpiredMsg('');
+      } else {
+        setError('사용자 정보를 불러올 수 없습니다.');
+      }
+
     } catch (err) {
       setError('서버 오류가 발생했습니다.');
     }
