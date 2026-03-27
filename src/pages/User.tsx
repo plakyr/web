@@ -16,26 +16,30 @@ export default function User() {
   const [timeLeft, setTimeLeft] = useState<string | null>(null);
   const [timerStatus, setTimerStatus] = useState<'WAITING' | 'ACTIVE' | 'EXPIRED' | 'COMPLETED'>('WAITING');
 
-  // 1. 데이터 로딩 (좌석 및 이벤트 정보) - user 유무와 상관없이 우선 시도
+  // User.tsx 내부
   useEffect(() => {
     const fetchInitialData = async () => {
+      console.log("좌석 데이터 요청 시작..."); // 콘솔 확인용
       try {
-        console.log("Fetching seats data...");
         const res = await fetch('/api/seats');
+        console.log("응답 상태:", res.status);
+        
         if (res.ok) {
           const data = await res.json();
-          console.log("Data received:", data);
+          console.log("받은 데이터:", data);
+          
           if (data.seats) useStore.getState().setSeats(data.seats);
           if (data.participants) useStore.getState().setParticipants(data.participants);
           if (data.sessionColors) useStore.getState().setSessionColors(data.sessionColors);
-        } else {
-          console.error("Fetch failed with status:", res.status);
         }
       } catch (err) {
-        console.error('API Fetch Error:', err);
+        console.error('Fetch Error:', err);
       }
     };
 
+    fetchInitialData(); // 의존성 없이 무조건 실행
+  }, []); // 페이지 로드 시 최초 1회 실행
+  
     fetchInitialData();
   }, [user?.id]); // 사용자 ID가 변경될 때마다(로그인 포함) 다시 확인
 
