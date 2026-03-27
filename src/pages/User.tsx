@@ -16,27 +16,41 @@ export default function User() {
   const [timeLeft, setTimeLeft] = useState<string | null>(null);
   const [timerStatus, setTimerStatus] = useState<'WAITING' | 'ACTIVE' | 'EXPIRED' | 'COMPLETED'>('WAITING');
 
-  // 1. 데이터 로딩 (좌석 및 이벤트 정보)
-  useEffect(() => {
+useEffect(() => {
     const fetchInitialData = async () => {
       try {
+        // 1. 관리자 이벤트 API 호출
         const res = await fetch('/api/admin/events');
         if (res.ok) {
           const data = await res.json();
-          // 현재 로그인한 유저의 이벤트 ID와 일치하는 데이터 찾기
+          
+          // 현재 로그인한 유저의 event_id와 일치하는 이벤트 찾기
           const currentEvent = data.find((e: any) => e.id === user?.event_id) || data[0];
           
-          if (currentEvent && currentEvent.VenueLayout?.[0]) {
-            const layout = currentEvent.VenueLayout[0];
-            useStore.getState().setSeats(layout.Seat || []);
-            
+          if (currentEvent) {
+            // 콘솔 확인용 (브라우저 F12에서 확인 가능)
+            console.log("선택된 이벤트 데이터:", currentEvent);
+
+            // 2. 좌석 데이터 추출 및 스토어 저장
+            // VenueLayout -> Seat 순서로 접근
+            const layout = currentEvent.VenueLayout?.[0];
+            if (layout && layout.Seat) {
+              useStore.getState().setSeats(layout.Seat);
+            }
+
+            // 3. 참가자 데이터 스토어 저장
             if (currentEvent.Participant) {
               useStore.getState().setParticipants(currentEvent.Participant);
+            }
+
+            // 4. 세션 컬러 정보가 있다면 저장 (SeatMap에서 색상 표시용)
+            if (currentEvent.SessionColor) {
+              useStore.getState().setSessionColors(currentEvent.SessionColor);
             }
           }
         }
       } catch (err) {
-        console.error('데이터 로딩 오류:', err);
+        console.error('초기 데이터 로드 실패:', err);
       }
     };
 
