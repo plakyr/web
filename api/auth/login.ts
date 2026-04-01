@@ -5,52 +5,62 @@ import jwt from 'jsonwebtoken';
 const prisma = new PrismaClient();
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // 1. POST 요청만 허용
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
   try {
-    // 프론트엔드에서 보낸 데이터 (세션ID, 전화번호 뒷4자리, 입장순서)
-    const { session_id, phone_last4, turn_order } = req.body;
+    // User.tsx에서 전달하는 필드명: name, phone_last4
+    const { name, phone_last4 } = req.body;
 
-    // 2. DB(PostgreSQL)에서 해당 참가자 찾기
+    if (!name || !phone_last4) {
+      return res.status(400).json({ error: '이름과 전화번호 뒷자리를 모두 입력해주세요.' });
+    }
+
+    // 1. 이름과 전화번호 뒷자리가 "동시에" 일치하는 참가자를 찾습니다.
+    // 현재 활성화된 이벤트(is_active: true) 소속인지도 함께 체크하여 보안을 강화합니다.
     const participant = await prisma.participant.findFirst({
       where: {
-        session_id: session_id,
-      },
+        participant_name: name, // CSV의 이름 컬럼
+        phone_last4: String(phone_last4), // CSV의 전화번호 뒷자리 컬럼
+        event: {
+          is_active: true // 활성화된 이벤트 참가자만 허용
+        }
+      }
     });
 
-    // 3. 참가자가 없으면 에러 반환
+    // 2. 일치하는 정보가 없으면 에러 반환 (임의 로그인 차단)
     if (!participant) {
-      return res.status(401).json({ error: '참가자 정보를 찾을 수 없습니다.' });
+      return res.status(401).json({ error: '등록된 정보가 없습니다. 이름과 번호를 다시 확인해주세요.' });
     }
 
-    // 4. JWT 토큰 생성 (관리자용과 동일한 SECRET 사용 권장)
+    // 3. JWT 설정 확인
     const JWT_SECRET = process.env.JWT_SECRET;
     if (!JWT_SECRET) {
-       return res.status(500).json({ error: '서버 설정 오류 (JWT_SECRET 미설정)' });
+      console.error("환경변수 JWT_SECRET이 설정되지 않았습니다.");
+      return res.status(500).json({ error: '서버 설정 오류' });
     }
 
+    // 4. 토큰 생성
     const token = jwt.sign(
       { 
         id: participant.id, 
         role: 'participant',
-        session_id: participant.session_id 
+        event_id: participant.event_id 
       },
       JWT_SECRET,
-      { expiresIn: '12h' } // 참가자는 보통 행사 당일만 유지되므로 12시간 정도가 적당합니다.
+      { expiresIn: '12h' }
     );
 
-    // 5. 성공 응답 (좌석 정보 등이 포함된 participant 객체 전달)
+    // 5. 성공 응답
     return res.status(200).json({
       success: true,
-      token,
+      token, // 프론트엔드의 sessionToken으로 저장됨
       user: participant
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Login error:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ error: '서버 내부 오류가 발생했습니다.' });
   }
 }
