@@ -76,16 +76,15 @@ export default function Admin() {
   };
 
 const updateStoreWithEventData = (event: any) => {
-  console.log("받은 이벤트 데이터:", event); // ← 콘솔에 찍힌 이 로그의 내용을 확인해야 합니다!
+  console.log("받은 이벤트 데이터:", event);
 
-  // 백엔드(events.ts)에서 'seats'라는 이름으로 직접 넣어주었으므로 바로 접근합니다.
+  // 1. 좌석 및 레이아웃 주입
   if (event.seats && event.seats.length > 0) {
     useStore.getState().setRows(event.rows);
     useStore.getState().setCols(event.cols);
     useStore.getState().setSeats(event.seats);
     console.log("좌석 배치 완료!");
   } else {
-    // ‼️ 만약 백엔드 수정이 아직 안됐다면 이전 경로를 찾습니다.
     const layout = event.layouts?.[0];
     if (layout?.seats) {
       useStore.getState().setRows(layout.rows);
@@ -95,18 +94,17 @@ const updateStoreWithEventData = (event: any) => {
       console.error("이 이벤트에는 레이아웃 데이터가 없습니다.");
     }
   }
+
+  // 2. 참가자 명단 주입
+  if (event.participants) {
+    useStore.getState().setParticipants(event.participants);
+  }
+
+  // 3. 세션 색상 및 시간 정보 주입
+  if (event.sessionColors) {
+    useStore.getState().setSessionColors(event.sessionColors);
+  }
 };
-
-    // 2. 참가자 명단 주입
-    if (event.participants) {
-      useStore.getState().setParticipants(event.participants);
-    }
-
-    // 3. 세션 색상 및 시간 정보 주입
-    if (event.sessionColors) {
-      useStore.getState().setSessionColors(event.sessionColors);
-    }
-  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
