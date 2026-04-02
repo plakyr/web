@@ -482,15 +482,7 @@ const updateStoreWithEventData = (event: any) => {
                   <div className="flex-1 flex gap-4">
                     <div className="flex-[2] flex flex-col">
                       <div className="flex-1 border border-gray-200 rounded-xl overflow-hidden bg-gray-50 min-h-[400px]">
-  {/* onSeatClick 프롭스를 추가하여 클릭 함수를 연결합니다. */}
-  <SeatMap onSeatClick={(seat) => {
-    console.log("클릭된 좌석:", seat);
-    if (seat.participant) {
-      alert(`참가자: ${seat.participant.participant_name}`);
-    } else {
-      alert("빈 좌석입니다.");
-    }
-  }} />
+  <SeatMap forceAdmin={true} /> 
 </div>
                       <p className="text-sm text-gray-500 mt-4 text-center font-medium">
                         예약된 좌석을 클릭하면 참가자 정보를 확인하고 강제 취소할 수 있습니다.
