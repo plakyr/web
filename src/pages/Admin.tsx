@@ -193,6 +193,27 @@ const updateStoreWithEventData = (event: any) => {
     }
   };
 
+  const handleSeatClick = (seat: any) => {
+  console.log("관리자가 클릭한 좌석:", seat);
+  
+  // 만약 좌석에 이미 참가자가 있다면 정보를 보여줍니다.
+  if (seat.participant) {
+    const confirmCancel = confirm(
+      `좌석: ${seat.label}\n참가자: ${seat.participant.participant_name}\n\n이 예약을 강제로 취소하시겠습니까?`
+    );
+    
+    if (confirmCancel && socket && selectedEventId) {
+      // 서버에 예약 취소 이벤트를 보냅니다 (서버 측 구현 필요)
+      socket.emit('admin:cancel_reservation', { 
+        eventId: selectedEventId, 
+        seatId: seat.id 
+      });
+    }
+  } else {
+    alert(`좌석 ${seat.label}은 비어 있습니다.`);
+  }
+};
+
   if (!adminToken) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
@@ -461,8 +482,16 @@ const updateStoreWithEventData = (event: any) => {
                   <div className="flex-1 flex gap-4">
                     <div className="flex-[2] flex flex-col">
                       <div className="flex-1 border border-gray-200 rounded-xl overflow-hidden bg-gray-50 min-h-[400px]">
-                        <SeatMap />
-                      </div>
+  {/* onSeatClick 프롭스를 추가하여 클릭 함수를 연결합니다. */}
+  <SeatMap onSeatClick={(seat) => {
+    console.log("클릭된 좌석:", seat);
+    if (seat.participant) {
+      alert(`참가자: ${seat.participant.participant_name}`);
+    } else {
+      alert("빈 좌석입니다.");
+    }
+  }} />
+</div>
                       <p className="text-sm text-gray-500 mt-4 text-center font-medium">
                         예약된 좌석을 클릭하면 참가자 정보를 확인하고 강제 취소할 수 있습니다.
                       </p>
