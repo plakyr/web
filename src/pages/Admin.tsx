@@ -75,25 +75,27 @@ export default function Admin() {
     }
   };
 
-// 데이터 주입을 위한 헬퍼 함수 (수정본)
-  const updateStoreWithEventData = (event: any) => {
-    // 1. 레이아웃 데이터 추출 (구조 유연성 확보)
-    const layout = event.layouts?.[0] || event.VenueLayout?.[0];
-    
-    if (layout) {
-      console.log("좌석 데이터 주입:", layout.seats?.length || 0, "개");
-      
-      // 행과 열 정보를 먼저 설정해야 SeatMap이 캔버스를 준비합니다.
-      if (layout.rows) useStore.getState().setRows(layout.rows);
-      if (layout.cols) useStore.getState().setCols(layout.cols);
-      
-      // 그 후 좌석 데이터를 주입합니다.
-      if (layout.seats) {
-        useStore.getState().setSeats(layout.seats);
-      }
+const updateStoreWithEventData = (event: any) => {
+  console.log("받은 이벤트 데이터:", event); // ← 콘솔에 찍힌 이 로그의 내용을 확인해야 합니다!
+
+  // 백엔드(events.ts)에서 'seats'라는 이름으로 직접 넣어주었으므로 바로 접근합니다.
+  if (event.seats && event.seats.length > 0) {
+    useStore.getState().setRows(event.rows);
+    useStore.getState().setCols(event.cols);
+    useStore.getState().setSeats(event.seats);
+    console.log("좌석 배치 완료!");
+  } else {
+    // ‼️ 만약 백엔드 수정이 아직 안됐다면 이전 경로를 찾습니다.
+    const layout = event.layouts?.[0];
+    if (layout?.seats) {
+      useStore.getState().setRows(layout.rows);
+      useStore.getState().setCols(layout.cols);
+      useStore.getState().setSeats(layout.seats);
     } else {
-      console.warn("이 이벤트에는 레이아웃 데이터가 없습니다.");
+      console.error("이 이벤트에는 레이아웃 데이터가 없습니다.");
     }
+  }
+};
 
     // 2. 참가자 명단 주입
     if (event.participants) {
