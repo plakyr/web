@@ -43,6 +43,8 @@ interface AppState {
   frozenReason: string | null;
   currentTurnOrder: number;
   currentTurnStartTime: string | null;
+  rows: number;
+  cols: number;
   seats: Seat[];
   participants: User[]; // For admin view
   sessionColors: { id: string; session_id: string; color: string; start_time?: string | null; end_time?: string | null }[];
@@ -54,6 +56,8 @@ interface AppState {
   setServerTime: (time: string) => void;
   setSystemState: (isFrozen: boolean, reason: string | null) => void;
   setSystemTurn: (order: number, startTime: string) => void;
+  setRows: (rows: number) => void;
+  setCols: (cols: number) => void;
   setSeats: (seats: Seat[]) => void;
   updateSeat: (seat: Seat) => void;
   setParticipants: (participants: User[]) => void;
@@ -73,6 +77,8 @@ export const useStore = create<AppState>((set) => ({
   frozenReason: null,
   currentTurnOrder: 1,
   currentTurnStartTime: null,
+  rows: 10, // 기본값
+  cols: 10, // 기본값
   seats: [],
   participants: [],
   sessionColors: [],
@@ -85,6 +91,11 @@ export const useStore = create<AppState>((set) => ({
   setSystemState: (isFrozen, reason) => set({ isFrozen, frozenReason: reason }),
   setSystemTurn: (order, startTime) => set({ currentTurnOrder: order, currentTurnStartTime: startTime }),
   setSeats: (seats) => set({ seats }),
+  setRows: (rows) => set({ rows }),
+  setCols: (cols) => set({ cols }),
+
+  setSessionColors: (colors) => set({ sessionColors: colors }),
+  setUser: (user, sessionToken) => set({ user, sessionToken }),
   updateSeat: (updatedSeat) => set((state) => ({
     seats: state.seats.map(seat => seat.id === updatedSeat.id ? updatedSeat : seat)
   })),
