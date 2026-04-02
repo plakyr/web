@@ -4,8 +4,9 @@ import { cn } from '../lib/utils';
 import { useStore } from '../store/useStore';
 import { useSocket } from '../store/useSocket';
 
-export default function SeatMap() {
-  const { seats, participants, user, isAdmin, isFrozen, sessionColors } = useStore();
+export default function SeatMap({ forceAdmin = false }: { forceAdmin?: boolean }) {
+  const { seats, participants, user, isAdmin: storeIsAdmin, isFrozen, sessionColors } = useStore();
+  const isAdmin = forceAdmin || storeIsAdmin; // props가 true면 무조건 관리자 모드
   const socket = useSocket();
   const [selectedSeatInfo, setSelectedSeatInfo] = useState<{ seatId: string, participant: any } | null>(null);
 
