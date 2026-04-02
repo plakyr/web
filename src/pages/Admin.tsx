@@ -75,14 +75,32 @@ export default function Admin() {
     }
   };
 
-  // 데이터 주입을 위한 헬퍼 함수 추가 (Admin 컴포넌트 내부)
+// 데이터 주입을 위한 헬퍼 함수 (수정본)
   const updateStoreWithEventData = (event: any) => {
-    if (event.layouts?.[0]?.seats) {
-      useStore.getState().setSeats(event.layouts[0].seats);
+    // 1. 레이아웃 데이터 추출 (구조 유연성 확보)
+    const layout = event.layouts?.[0] || event.VenueLayout?.[0];
+    
+    if (layout) {
+      console.log("좌석 데이터 주입:", layout.seats?.length || 0, "개");
+      
+      // 행과 열 정보를 먼저 설정해야 SeatMap이 캔버스를 준비합니다.
+      if (layout.rows) useStore.getState().setRows(layout.rows);
+      if (layout.cols) useStore.getState().setCols(layout.cols);
+      
+      // 그 후 좌석 데이터를 주입합니다.
+      if (layout.seats) {
+        useStore.getState().setSeats(layout.seats);
+      }
+    } else {
+      console.warn("이 이벤트에는 레이아웃 데이터가 없습니다.");
     }
+
+    // 2. 참가자 명단 주입
     if (event.participants) {
       useStore.getState().setParticipants(event.participants);
     }
+
+    // 3. 세션 색상 및 시간 정보 주입
     if (event.sessionColors) {
       useStore.getState().setSessionColors(event.sessionColors);
     }
