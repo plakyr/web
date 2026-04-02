@@ -38,30 +38,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-const events = await prisma.event.findMany({
-  orderBy: { date: 'desc' },
-  include: {
-    layouts: {
-      select: {
-        id: true,
-        rows: true,
-        cols: true,
-        seats: true, // 이 줄이 반드시 있어야 좌석 배치가 그려집니다!
+    const events = await prisma.event.findMany({
+      orderBy: { date: 'desc' },
+      include: {
+        layouts: {
+          select: {
+            id: true,
+            rows: true,
+            cols: true,
+            seats: true, // DB에서 좌석 정보를 가져옵니다.
+          },
+        },
+        participants: true, // DB에서 참가자 명단을 가져옵니다.
       },
-    },
-    // 관리자 페이지에서 참가자 명단도 함께 보려면 아래 줄도 추가 권장
-    participants: true, 
-  },
-});
+    });
 
     const normalizedEvents = events.map((event) => ({
       id: event.id,
       name: event.name,
       date: event.date,
       is_active: event.is_active,
+      // 프론트엔드에서 쉽게 쓸 수 있도록 레이아웃 정보를 꺼내줍니다.
       rows: event.layouts[0]?.rows ?? 0,
       cols: event.layouts[0]?.cols ?? 0,
+      seats: event.layouts[0]?.seats ?? [], // ✨ 필수: 좌석 배열 전달
       layoutId: event.layouts[0]?.id ?? null,
+      participants: event.participants ?? [], // ✨ 필수: 참가자 배열 전달
     }));
 
     return res.status(200).json({ events: normalizedEvents });
@@ -70,38 +72,4 @@ const events = await prisma.event.findMany({
       error: 'Failed to fetch events: ' + (error?.message || 'Unknown error'),
     });
   }
-}
-
-try {
-  const events = await prisma.event.findMany({
-    orderBy: { date: 'desc' },
-    include: {
-      layouts: {
-        select: {
-          id: true,
-          rows: true,
-          cols: true,
-          seats: true, // DB에서 가져오기
-        },
-      },
-      participants: true, // DB에서 가져오기
-    },
-  });
-
-  const normalizedEvents = events.map((event) => ({
-    id: event.id,
-    name: event.name,
-    date: event.date,
-    is_active: event.is_active,
-    // layout 정보를 더 직접적으로 구조화
-    layouts: event.layouts, // 배열 형태로 그대로 전달하거나
-    rows: event.layouts[0]?.rows ?? 0,
-    cols: event.layouts[0]?.cols ?? 0,
-    seats: event.layouts[0]?.seats ?? [], // ✨ 이 줄이 추가되어야 합니다!
-    participants: event.participants ?? [], // ✨ 참가자 명단도 추가
-  }));
-
-  return res.status(200).json({ events: normalizedEvents });
-} catch (error: any) {
-  // ... 에러 처리 동일
 }
