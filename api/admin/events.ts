@@ -71,3 +71,37 @@ const events = await prisma.event.findMany({
     });
   }
 }
+
+try {
+  const events = await prisma.event.findMany({
+    orderBy: { date: 'desc' },
+    include: {
+      layouts: {
+        select: {
+          id: true,
+          rows: true,
+          cols: true,
+          seats: true, // DB에서 가져오기
+        },
+      },
+      participants: true, // DB에서 가져오기
+    },
+  });
+
+  const normalizedEvents = events.map((event) => ({
+    id: event.id,
+    name: event.name,
+    date: event.date,
+    is_active: event.is_active,
+    // layout 정보를 더 직접적으로 구조화
+    layouts: event.layouts, // 배열 형태로 그대로 전달하거나
+    rows: event.layouts[0]?.rows ?? 0,
+    cols: event.layouts[0]?.cols ?? 0,
+    seats: event.layouts[0]?.seats ?? [], // ✨ 이 줄이 추가되어야 합니다!
+    participants: event.participants ?? [], // ✨ 참가자 명단도 추가
+  }));
+
+  return res.status(200).json({ events: normalizedEvents });
+} catch (error: any) {
+  // ... 에러 처리 동일
+}
