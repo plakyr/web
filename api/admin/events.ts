@@ -38,18 +38,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const events = await prisma.event.findMany({
-      orderBy: { date: 'desc' },
-      include: {
-        layouts: {
-          select: {
-            id: true,
-            rows: true,
-            cols: true,
-          },
-        },
+const events = await prisma.event.findMany({
+  orderBy: { date: 'desc' },
+  include: {
+    layouts: {
+      select: {
+        id: true,
+        rows: true,
+        cols: true,
+        seats: true, // 이 줄이 반드시 있어야 좌석 배치가 그려집니다!
       },
-    });
+    },
+    // 관리자 페이지에서 참가자 명단도 함께 보려면 아래 줄도 추가 권장
+    participants: true, 
+  },
+});
 
     const normalizedEvents = events.map((event) => ({
       id: event.id,
